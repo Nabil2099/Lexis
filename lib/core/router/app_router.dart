@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
 import '../../features/archive/presentation/screens/archive_screen.dart';
+import '../../features/daily_notes/presentation/screens/daily_note_screen.dart';
 import '../../features/notes/presentation/screens/note_editor_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -24,6 +25,7 @@ class AppRoutes {
   static const trash = '/trash';
   static const settings = '/settings';
   static const newNote = '/note/new';
+  static String daily(String dateKey) => '/daily/$dateKey';
 }
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -116,6 +118,12 @@ final appRouter = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       builder: (_, state) =>
           NoteEditorScreen(noteId: state.pathParameters['id']),
+    ),
+    GoRoute(
+      path: '/daily/:date',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (_, state) =>
+          DailyNoteScreen(dateKey: state.pathParameters['date']!),
     ),
     GoRoute(
       path: AppRoutes.archive,

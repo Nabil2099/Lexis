@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/router/app_router.dart';
 import '../core/theme/app_theme.dart';
+import '../features/security/presentation/app_lock_gate.dart';
 import '../features/settings/presentation/controllers/settings_controller.dart';
 
 class LexisApp extends ConsumerWidget {
@@ -21,6 +22,9 @@ class LexisApp extends ConsumerWidget {
       darkTheme: theme,
       themeMode: ThemeMode.dark,
       routerConfig: appRouter,
+      builder: (context, child) {
+        return AppLockGate(child: child ?? const SizedBox.shrink());
+      },
     );
   }
 }

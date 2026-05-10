@@ -1,10 +1,12 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../../features/attachments/data/models/attachment_hive_model.dart';
 import '../../features/notes/data/models/note_hive_model.dart';
 import '../../features/notes/data/models/note_type_adapter.dart';
 import '../../features/search/data/models/search_index_hive_model.dart';
 import '../../features/settings/data/models/app_settings_hive_model.dart';
 import '../../features/spaces/data/models/space_hive_model.dart';
+import '../../features/sync/data/models/sync_record_hive_model.dart';
 import '../../features/tags/data/models/tag_hive_model.dart';
 import 'hive_boxes.dart';
 
@@ -27,6 +29,8 @@ class HiveInit {
       Hive.openBox<TagHiveModel>(HiveBoxes.tags),
       Hive.openBox<AppSettingsHiveModel>(HiveBoxes.settings),
       Hive.openBox<SearchIndexHiveModel>(HiveBoxes.searchIndex),
+      Hive.openBox<AttachmentHiveModel>(HiveBoxes.attachments),
+      Hive.openBox<SyncRecordHiveModel>(HiveBoxes.syncQueue),
     ]);
   }
 
@@ -51,6 +55,12 @@ class HiveInit {
     }
     if (!Hive.isAdapterRegistered(SearchIndexHiveModelAdapter().typeId)) {
       Hive.registerAdapter(SearchIndexHiveModelAdapter());
+    }
+    if (!Hive.isAdapterRegistered(AttachmentHiveModelAdapter().typeId)) {
+      Hive.registerAdapter(AttachmentHiveModelAdapter());
+    }
+    if (!Hive.isAdapterRegistered(SyncRecordHiveModelAdapter().typeId)) {
+      Hive.registerAdapter(SyncRecordHiveModelAdapter());
     }
   }
 }

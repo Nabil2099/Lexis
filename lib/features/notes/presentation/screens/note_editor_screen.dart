@@ -9,6 +9,8 @@ import '../../../../shared/widgets/app_bottom_sheet.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../ai_assist/domain/entities/note_smart_assist_result.dart';
+import '../../../attachments/data/repositories/attachments_repository.dart';
+import '../../../attachments/domain/entities/attachment_entity.dart';
 import '../../../settings/presentation/controllers/settings_controller.dart';
 import '../../../spaces/presentation/controllers/spaces_controller.dart';
 import '../../../tags/presentation/controllers/tags_controller.dart';
@@ -109,11 +111,82 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     );
   }
 
+  Future<void> _regenerateSmartAssist(NoteEntity note) async {
+    final hasTitle = note.title.trim().isNotEmpty;
+    var replaceTitle = false;
+    if (hasTitle) {
+      replaceTitle = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Replace title?'),
+              content: const Text(
+                'Smart Assist can refresh the summary and tags now. Replace the current title too?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Keep title'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Replace'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    }
+    final result = await ref
+        .read(noteEditorControllerProvider(widget.noteId).notifier)
+        .regenerateSmartAssist(replaceTitle: replaceTitle);
+    if (!mounted || result == null) return;
+    if (replaceTitle && result.note.title != _titleController.text.trim()) {
+      _titleController.text = result.note.title;
+    }
+    setState(() {
+      _assistResult = result.generatedAnything ? result : null;
+      _dirty = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Smart Assist regenerated')),
+    );
+  }
+
+  Future<void> _attachFile() async {
+    if (_dirty) await _save();
+    final note =
+        ref.read(noteEditorControllerProvider(widget.noteId)).asData?.value;
+    if (note == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Save the note before adding files')),
+      );
+      return;
+    }
+    final attachment =
+        await ref.read(attachmentsRepositoryProvider).pickAndAttach(note.id);
+    if (!mounted) return;
+    if (attachment != null) {
+      await ref
+          .read(noteEditorControllerProvider(widget.noteId).notifier)
+          .reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attached ${attachment.fileName}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final noteAsync = ref.watch(noteEditorControllerProvider(widget.noteId));
     final spaces = ref.watch(spacesControllerProvider).asData?.value ?? [];
     final tags = ref.watch(tagsControllerProvider).asData?.value ?? [];
+    final currentNote = noteAsync.asData?.value;
+    final attachments = currentNote == null
+        ? const <AttachmentEntity>[]
+        : ref.watch(noteAttachmentsProvider(currentNote.id)).asData?.value ??
+            const <AttachmentEntity>[];
 
     return PopScope(
       canPop: false,
@@ -165,11 +238,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                             );
                           }
                         }
+                        if (value == 'smart') {
+                          await _regenerateSmartAssist(note);
+                        }
+                        if (value == 'attach') {
+                          await _attachFile();
+                        }
                       },
                       itemBuilder: (_) => [
                         PopupMenuItem(
                             value: 'pin',
                             child: Text(note.isPinned ? 'Unpin' : 'Pin')),
+                        const PopupMenuItem(
+                            value: 'smart',
+                            child: Text('Regenerate Smart Assist')),
+                        const PopupMenuItem(
+                            value: 'attach', child: Text('Add attachment')),
                         const PopupMenuItem(
                             value: 'archive', child: Text('Archive')),
                       ],
@@ -235,6 +319,26 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                           _dirty = true;
                         }),
                       ),
+                      if (note?.backlinks.isNotEmpty == true) ...[
+                        const SizedBox(height: 12),
+                        _BacklinksCard(count: note!.backlinks.length),
+                      ],
+                      if (attachments.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _AttachmentsCard(
+                          attachments: attachments,
+                          onRemove: (attachmentId) async {
+                            await ref
+                                .read(attachmentsRepositoryProvider)
+                                .remove(attachmentId);
+                            await ref
+                                .read(
+                                    noteEditorControllerProvider(widget.noteId)
+                                        .notifier)
+                                .reload();
+                          },
+                        ),
+                      ],
                       if (_assistResult != null) ...[
                         const SizedBox(height: 14),
                         _SmartAssistCard(
@@ -411,6 +515,74 @@ class _SmartAssistCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BacklinksCard extends StatelessWidget {
+  const _BacklinksCard({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.account_tree_outlined,
+              size: 18, color: AppColors.cyanAccent),
+          const SizedBox(width: 10),
+          Text(
+            '$count linked note${count == 1 ? '' : 's'}',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentsCard extends StatelessWidget {
+  const _AttachmentsCard({
+    required this.attachments,
+    required this.onRemove,
+  });
+
+  final List<AttachmentEntity> attachments;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.attach_file,
+                  size: 18, color: AppColors.cyanAccent),
+              const SizedBox(width: 8),
+              Text('Attachments',
+                  style: Theme.of(context).textTheme.titleSmall),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final attachment in attachments)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(attachment.fileName),
+              subtitle: Text('${attachment.sizeBytes} bytes'),
+              trailing: IconButton(
+                tooltip: 'Remove attachment',
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => onRemove(attachment.id),
+              ),
+            ),
         ],
       ),
     );

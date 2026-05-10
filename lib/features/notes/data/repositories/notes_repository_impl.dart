@@ -2,19 +2,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/search_utils.dart';
 import '../../../search/domain/entities/search_filter_entity.dart';
+import '../../../sync/data/repositories/sync_queue_repository.dart';
 import '../../domain/entities/note_entity.dart';
 import '../../domain/repositories/notes_repository.dart';
 import '../datasources/notes_local_datasource.dart';
 import '../models/note_hive_model.dart';
 
 final notesRepositoryProvider = Provider<NotesRepository>((ref) {
-  return NotesRepositoryImpl(NotesLocalDataSource());
+  return NotesRepositoryImpl(
+    NotesLocalDataSource(),
+    ref.watch(syncQueueRepositoryProvider),
+  );
 });
 
 class NotesRepositoryImpl implements NotesRepository {
-  NotesRepositoryImpl(this._dataSource);
+  NotesRepositoryImpl(this._dataSource, this._syncQueue);
 
   final NotesLocalDataSource _dataSource;
+  final SyncQueueRepository _syncQueue;
 
   @override
   Future<List<NoteEntity>> getAll() async {
@@ -74,6 +79,11 @@ class NotesRepositoryImpl implements NotesRepository {
   Future<NoteEntity> create(NoteEntity note) async {
     final model = NoteHiveModel.fromEntity(note);
     await _dataSource.put(model);
+    await _syncQueue.record(
+      entityType: 'note',
+      entityId: note.id,
+      action: 'create',
+    );
     return model.toEntity();
   }
 
@@ -81,6 +91,11 @@ class NotesRepositoryImpl implements NotesRepository {
   Future<NoteEntity> update(NoteEntity note) async {
     final model = NoteHiveModel.fromEntity(note);
     await _dataSource.put(model);
+    await _syncQueue.record(
+      entityType: 'note',
+      entityId: note.id,
+      action: 'update',
+    );
     return model.toEntity();
   }
 
@@ -135,7 +150,10 @@ class NotesRepositoryImpl implements NotesRepository {
   }
 
   @override
-  Future<void> permanentlyDelete(String id) => _dataSource.deleteForever(id);
+  Future<void> permanentlyDelete(String id) async {
+    await _dataSource.deleteForever(id);
+    await _syncQueue.record(entityType: 'note', entityId: id, action: 'delete');
+  }
 
   @override
   Future<void> emptyTrash() => _dataSource.emptyTrash();

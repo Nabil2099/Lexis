@@ -12,6 +12,7 @@ class CreateNote {
     NoteType type = NoteType.note,
     String? spaceId,
     List<String> tagIds = const [],
+    String? dailyDate,
   }) {
     final now = DateTime.now();
     return NoteEntity(
@@ -36,6 +37,7 @@ class CreateNote {
       attachments: const [],
       summary: null,
       colorIndex: 0,
+      dailyDate: dailyDate,
     );
   }
 }

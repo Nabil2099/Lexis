@@ -26,6 +26,7 @@ class NoteHiveModel extends HiveObject {
     this.spaceId,
     this.folderId,
     this.summary,
+    this.dailyDate,
   });
 
   factory NoteHiveModel.fromEntity(NoteEntity entity) {
@@ -49,6 +50,7 @@ class NoteHiveModel extends HiveObject {
       attachments: List<String>.from(entity.attachments),
       summary: entity.summary,
       colorIndex: entity.colorIndex,
+      dailyDate: entity.dailyDate,
     );
   }
 
@@ -82,6 +84,7 @@ class NoteHiveModel extends HiveObject {
       attachments: const [],
       summary: null,
       colorIndex: 0,
+      dailyDate: null,
     );
   }
 
@@ -123,6 +126,8 @@ class NoteHiveModel extends HiveObject {
   final String? summary;
   @HiveField(18)
   final int colorIndex;
+  @HiveField(19)
+  final String? dailyDate;
 
   NoteEntity toEntity() {
     return NoteEntity(
@@ -145,6 +150,7 @@ class NoteHiveModel extends HiveObject {
       attachments: List<String>.from(attachments),
       summary: summary,
       colorIndex: colorIndex,
+      dailyDate: dailyDate,
     );
   }
 
@@ -168,6 +174,7 @@ class NoteHiveModel extends HiveObject {
     List<String>? attachments,
     Object? summary = _sentinel,
     int? colorIndex,
+    Object? dailyDate = _sentinel,
   }) {
     final nextContent = content ?? this.content;
     return NoteHiveModel(
@@ -190,6 +197,7 @@ class NoteHiveModel extends HiveObject {
       attachments: attachments ?? this.attachments,
       summary: summary == _sentinel ? this.summary : summary as String?,
       colorIndex: colorIndex ?? this.colorIndex,
+      dailyDate: dailyDate == _sentinel ? this.dailyDate : dailyDate as String?,
     );
   }
 }
@@ -227,13 +235,14 @@ class NoteHiveModelAdapter extends TypeAdapter<NoteHiveModel> {
       attachments: (fields[16] as List?)?.cast<String>() ?? const [],
       summary: fields[17] as String?,
       colorIndex: fields[18] as int? ?? 0,
+      dailyDate: fields[19] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, NoteHiveModel obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -271,6 +280,8 @@ class NoteHiveModelAdapter extends TypeAdapter<NoteHiveModel> {
       ..writeByte(17)
       ..write(obj.summary)
       ..writeByte(18)
-      ..write(obj.colorIndex);
+      ..write(obj.colorIndex)
+      ..writeByte(19)
+      ..write(obj.dailyDate);
   }
 }

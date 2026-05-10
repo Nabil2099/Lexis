@@ -7,4 +7,6 @@ class HiveBoxes {
   static const settings = 'settings_box';
   static const searchIndex = 'search_index_box';
   static const trash = 'trash_box';
+  static const attachments = 'attachments_box';
+  static const syncQueue = 'sync_queue_box';
 }

@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../notes/data/repositories/notes_repository_impl.dart';
 import '../../../notes/domain/repositories/notes_repository.dart';
+import '../../../sync/data/repositories/sync_queue_repository.dart';
 import '../../domain/entities/space_entity.dart';
 import '../../domain/repositories/spaces_repository.dart';
 import '../datasources/spaces_local_datasource.dart';
@@ -12,14 +13,17 @@ final spacesRepositoryProvider = Provider<SpacesRepository>((ref) {
   return SpacesRepositoryImpl(
     SpacesLocalDataSource(),
     ref.watch(notesRepositoryProvider),
+    ref.watch(syncQueueRepositoryProvider),
   );
 });
 
 class SpacesRepositoryImpl implements SpacesRepository {
-  SpacesRepositoryImpl(this._dataSource, this._notesRepository);
+  SpacesRepositoryImpl(
+      this._dataSource, this._notesRepository, this._syncQueue);
 
   final SpacesLocalDataSource _dataSource;
   final NotesRepository _notesRepository;
+  final SyncQueueRepository _syncQueue;
 
   @override
   Future<List<SpaceEntity>> getAll() async {
@@ -52,6 +56,11 @@ class SpacesRepositoryImpl implements SpacesRepository {
       isArchived: false,
     );
     await _dataSource.put(model);
+    await _syncQueue.record(
+      entityType: 'space',
+      entityId: model.id,
+      action: 'create',
+    );
     return model.toEntity();
   }
 
@@ -60,6 +69,11 @@ class SpacesRepositoryImpl implements SpacesRepository {
     final model =
         SpaceHiveModel.fromEntity(space.copyWith(updatedAt: DateTime.now()));
     await _dataSource.put(model);
+    await _syncQueue.record(
+      entityType: 'space',
+      entityId: model.id,
+      action: 'update',
+    );
     return model.toEntity(noteCount: await getNoteCount(model.id));
   }
 
@@ -69,6 +83,8 @@ class SpacesRepositoryImpl implements SpacesRepository {
     if (space == null) return;
     await _dataSource
         .put(space.copyWith(isArchived: true, updatedAt: DateTime.now()));
+    await _syncQueue.record(
+        entityType: 'space', entityId: id, action: 'update');
   }
 
   @override
@@ -79,6 +95,8 @@ class SpacesRepositoryImpl implements SpacesRepository {
           .update(note.copyWith(spaceId: null, updatedAt: DateTime.now()));
     }
     await _dataSource.delete(id);
+    await _syncQueue.record(
+        entityType: 'space', entityId: id, action: 'delete');
   }
 
   @override

@@ -10,6 +10,11 @@ class AppSettingsEntity {
     required this.smartAssistAutoTitle,
     required this.smartAssistAutoSummary,
     required this.smartAssistSuggestTags,
+    required this.encryptionKeyReady,
+    required this.appLockEnabled,
+    required this.lockAfterMinutes,
+    required this.syncEnabled,
+    required this.syncLastSyncedAt,
   });
 
   factory AppSettingsEntity.defaults() {
@@ -24,6 +29,11 @@ class AppSettingsEntity {
       smartAssistAutoTitle: true,
       smartAssistAutoSummary: true,
       smartAssistSuggestTags: true,
+      encryptionKeyReady: false,
+      appLockEnabled: false,
+      lockAfterMinutes: 5,
+      syncEnabled: false,
+      syncLastSyncedAt: null,
     );
   }
 
@@ -37,6 +47,11 @@ class AppSettingsEntity {
   final bool smartAssistAutoTitle;
   final bool smartAssistAutoSummary;
   final bool smartAssistSuggestTags;
+  final bool encryptionKeyReady;
+  final bool appLockEnabled;
+  final int lockAfterMinutes;
+  final bool syncEnabled;
+  final DateTime? syncLastSyncedAt;
 
   AppSettingsEntity copyWith({
     bool? useMarkdownPreview,
@@ -49,6 +64,11 @@ class AppSettingsEntity {
     bool? smartAssistAutoTitle,
     bool? smartAssistAutoSummary,
     bool? smartAssistSuggestTags,
+    bool? encryptionKeyReady,
+    bool? appLockEnabled,
+    int? lockAfterMinutes,
+    bool? syncEnabled,
+    Object? syncLastSyncedAt = _sentinel,
   }) {
     return AppSettingsEntity(
       useMarkdownPreview: useMarkdownPreview ?? this.useMarkdownPreview,
@@ -63,6 +83,15 @@ class AppSettingsEntity {
           smartAssistAutoSummary ?? this.smartAssistAutoSummary,
       smartAssistSuggestTags:
           smartAssistSuggestTags ?? this.smartAssistSuggestTags,
+      encryptionKeyReady: encryptionKeyReady ?? this.encryptionKeyReady,
+      appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+      lockAfterMinutes: lockAfterMinutes ?? this.lockAfterMinutes,
+      syncEnabled: syncEnabled ?? this.syncEnabled,
+      syncLastSyncedAt: syncLastSyncedAt == _sentinel
+          ? this.syncLastSyncedAt
+          : syncLastSyncedAt as DateTime?,
     );
   }
 }
+
+const Object _sentinel = Object();

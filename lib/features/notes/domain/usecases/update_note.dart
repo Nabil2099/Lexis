@@ -11,6 +11,7 @@ class UpdateNote {
     NoteType? type,
     String? spaceId,
     List<String>? tagIds,
+    Object? dailyDate = _sentinel,
   }) {
     final nextContent = content ?? note.content;
     return note.copyWith(
@@ -22,6 +23,7 @@ class UpdateNote {
       spaceId: spaceId,
       tagIds: tagIds,
       wordCount: MarkdownUtils.wordCount(nextContent),
+      dailyDate: dailyDate == _sentinel ? note.dailyDate : dailyDate as String?,
       status: note.isArchived
           ? NoteStatus.archived
           : note.isDeleted
@@ -30,3 +32,5 @@ class UpdateNote {
     );
   }
 }
+
+const Object _sentinel = Object();

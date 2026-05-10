@@ -49,6 +49,7 @@ class NoteEntity {
     this.spaceId,
     this.folderId,
     this.summary,
+    this.dailyDate,
   });
 
   final String id;
@@ -70,6 +71,7 @@ class NoteEntity {
   final List<String> attachments;
   final String? summary;
   final int colorIndex;
+  final String? dailyDate;
 
   String get displayTitle => title.trim().isEmpty ? 'Untitled' : title.trim();
 
@@ -93,6 +95,7 @@ class NoteEntity {
     List<String>? attachments,
     Object? summary = _sentinel,
     int? colorIndex,
+    Object? dailyDate = _sentinel,
   }) {
     return NoteEntity(
       id: id ?? this.id,
@@ -114,6 +117,7 @@ class NoteEntity {
       attachments: attachments ?? this.attachments,
       summary: summary == _sentinel ? this.summary : summary as String?,
       colorIndex: colorIndex ?? this.colorIndex,
+      dailyDate: dailyDate == _sentinel ? this.dailyDate : dailyDate as String?,
     );
   }
 }

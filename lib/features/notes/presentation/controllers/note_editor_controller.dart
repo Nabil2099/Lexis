@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/sync/app_sync.dart';
+import '../../../../core/utils/backlink_utils.dart';
 import '../../../ai_assist/application/note_smart_assist_service.dart';
 import '../../../ai_assist/domain/entities/note_smart_assist_result.dart';
 import '../../../archive/presentation/controllers/archive_controller.dart';
@@ -64,9 +65,16 @@ class NoteEditorController extends AsyncNotifier<NoteEntity?> {
             ),
           );
     final assistResult = await _applySmartAssist(saved);
-    state = AsyncData(assistResult.note);
+    final backlinked = await _refreshBacklinks(assistResult.note);
+    final nextResult = NoteSmartAssistResult(
+      note: backlinked,
+      generatedTitle: assistResult.generatedTitle,
+      generatedSummary: assistResult.generatedSummary,
+      suggestedTagIds: assistResult.suggestedTagIds,
+    );
+    state = AsyncData(nextResult.note);
     _refreshDependents();
-    return assistResult;
+    return nextResult;
   }
 
   Future<NoteSmartAssistResult> _applySmartAssist(NoteEntity saved) async {
@@ -129,6 +137,55 @@ class NoteEditorController extends AsyncNotifier<NoteEntity?> {
     return updated;
   }
 
+  Future<NoteSmartAssistResult?> regenerateSmartAssist({
+    bool replaceTitle = false,
+  }) async {
+    final note = state.asData?.value;
+    if (note == null) return null;
+    final settings = ref.read(settingsControllerProvider).asData?.value ??
+        AppSettingsEntity.defaults();
+    final tags = await ref.read(tagsRepositoryProvider).getAll();
+    final source = replaceTitle ? note.copyWith(title: '') : note;
+    final suggestion = ref.read(noteSmartAssistServiceProvider).suggest(
+          note: source,
+          availableTags: tags,
+          settings: settings.copyWith(
+            smartAssistEnabled: true,
+            smartAssistAutoTitle: true,
+            smartAssistAutoSummary: true,
+            smartAssistSuggestTags: true,
+          ),
+        );
+    final nextTitle = replaceTitle || note.title.trim().isEmpty
+        ? suggestion.generatedTitle ?? note.title
+        : note.title;
+    final nextSummary = suggestion.generatedSummary ?? note.summary;
+    final updated = await ref.read(notesRepositoryProvider).update(
+          note.copyWith(
+            title: nextTitle,
+            summary: nextSummary,
+            updatedAt: DateTime.now(),
+          ),
+        );
+    state = AsyncData(updated);
+    _refreshDependents();
+    return NoteSmartAssistResult(
+      note: updated,
+      generatedTitle: nextTitle != note.title ? nextTitle : null,
+      generatedSummary: nextSummary != note.summary ? nextSummary : null,
+      suggestedTagIds: suggestion.suggestedTagIds,
+    );
+  }
+
+  Future<NoteEntity?> reload() async {
+    final note = state.asData?.value;
+    if (note == null) return null;
+    final reloaded = await ref.read(notesRepositoryProvider).getById(note.id);
+    state = AsyncData(reloaded);
+    _refreshDependents();
+    return reloaded;
+  }
+
   Future<void> togglePin() async {
     final note = state.asData?.value;
     if (note == null) return;
@@ -143,6 +200,22 @@ class NoteEditorController extends AsyncNotifier<NoteEntity?> {
     await ref.read(notesRepositoryProvider).archive(note.id);
     state = AsyncData(await ref.read(notesRepositoryProvider).getById(note.id));
     _refreshDependents();
+  }
+
+  Future<NoteEntity> _refreshBacklinks(NoteEntity note) async {
+    final allNotes = await ref.read(notesRepositoryProvider).getAll();
+    final backlinks = BacklinkUtils.resolveLinkedNoteIds(
+      source: note,
+      notes: allNotes,
+    );
+    if (_sameStringSet(backlinks, note.backlinks)) return note;
+    return ref.read(notesRepositoryProvider).update(
+          note.copyWith(backlinks: backlinks, updatedAt: DateTime.now()),
+        );
+  }
+
+  bool _sameStringSet(List<String> a, List<String> b) {
+    return a.length == b.length && a.toSet().containsAll(b);
   }
 
   void _refreshDependents() {

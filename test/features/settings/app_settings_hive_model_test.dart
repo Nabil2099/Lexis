@@ -10,6 +10,9 @@ void main() {
     expect(settings.smartAssistAutoTitle, isTrue);
     expect(settings.smartAssistAutoSummary, isTrue);
     expect(settings.smartAssistSuggestTags, isTrue);
+    expect(settings.encryptionKeyReady, isFalse);
+    expect(settings.appLockEnabled, isFalse);
+    expect(settings.syncEnabled, isFalse);
   });
 
   test('Hive settings round trip preserves Smart Assist settings', () {
@@ -18,6 +21,9 @@ void main() {
       smartAssistAutoTitle: false,
       smartAssistAutoSummary: true,
       smartAssistSuggestTags: false,
+      encryptionKeyReady: true,
+      appLockEnabled: true,
+      syncEnabled: true,
     );
 
     final roundTrip = AppSettingsHiveModel.fromEntity(entity).toEntity();
@@ -26,5 +32,8 @@ void main() {
     expect(roundTrip.smartAssistAutoTitle, isFalse);
     expect(roundTrip.smartAssistAutoSummary, isTrue);
     expect(roundTrip.smartAssistSuggestTags, isFalse);
+    expect(roundTrip.encryptionKeyReady, isTrue);
+    expect(roundTrip.appLockEnabled, isTrue);
+    expect(roundTrip.syncEnabled, isTrue);
   });
 }

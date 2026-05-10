@@ -11,6 +11,7 @@ import '../../../../shared/widgets/app_chip.dart';
 import '../../../notes/domain/entities/note_entity.dart';
 import '../../../notes/presentation/controllers/notes_controller.dart';
 import '../../../notes/presentation/widgets/note_actions_sheet.dart';
+import '../../../daily_notes/application/daily_notes_service.dart';
 import '../../../spaces/presentation/controllers/spaces_controller.dart';
 import '../../../tags/presentation/controllers/tags_controller.dart';
 import '../controllers/vault_controller.dart';
@@ -77,6 +78,14 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                   ),
                   const SizedBox(height: 16),
                   const QuickCaptureCard(),
+                  const SizedBox(height: 12),
+                  _DailyNoteCard(
+                    onTap: () => context.push(
+                      AppRoutes.daily(
+                        DailyNotesService.dateKey(DateTime.now()),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   _SmartFilters(
                     selected: _filter,
@@ -175,6 +184,53 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text('Moved to trash')));
         },
+      ),
+    );
+  }
+}
+
+class _DailyNoteCard extends StatelessWidget {
+  const _DailyNoteCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.today_outlined, color: AppColors.cyanAccent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Open today',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Create or continue your daily note.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios,
+                  size: 16, color: AppColors.textMuted),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../../shared/widgets/app_error_state.dart';
 import '../../../../shared/widgets/app_loading_state.dart';
 import '../../../../shared/widgets/app_section_header.dart';
+import '../../../backup/application/lexis_backup_service.dart';
 import '../controllers/settings_controller.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -69,7 +70,52 @@ class SettingsScreen extends ConsumerWidget {
                         .read(settingsControllerProvider.notifier)
                         .applySettings(value.copyWith(showWordCount: next)),
                   ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('Biometric app lock'),
+                    subtitle: const Text(
+                        'Require device authentication before opening Lexis.'),
+                    value: value.appLockEnabled,
+                    onChanged: (next) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .applySettings(value.copyWith(appLockEnabled: next)),
+                  ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const AppSectionHeader(
+              title: 'Privacy',
+              subtitle: 'Local protection for your private vault.',
+            ),
+            const SizedBox(height: 12),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.enhanced_encryption_outlined),
+                title: Text(value.encryptionKeyReady
+                    ? 'Encryption key ready'
+                    : 'Prepare encryption key'),
+                subtitle: Text(value.encryptionKeyReady
+                    ? 'A device-secured key is stored for encrypted storage migration.'
+                    : 'Generate a secure local key before enabling encrypted Hive migration.'),
+                trailing: value.encryptionKeyReady
+                    ? const Icon(Icons.check_circle, color: AppColors.success)
+                    : null,
+                onTap: value.encryptionKeyReady
+                    ? null
+                    : () async {
+                        await ref
+                            .read(settingsControllerProvider.notifier)
+                            .prepareEncryptionKey();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Encryption key prepared'),
+                            ),
+                          );
+                        }
+                      },
               ),
             ),
             const SizedBox(height: 24),
@@ -127,6 +173,13 @@ class SettingsScreen extends ConsumerWidget {
                                 value.copyWith(smartAssistSuggestTags: next))
                         : null,
                   ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.auto_fix_high_outlined),
+                    title: const Text('Manual regeneration'),
+                    subtitle: const Text(
+                        'Open a note menu and choose Regenerate Smart Assist.'),
+                  ),
                 ],
               ),
             ),
@@ -149,11 +202,87 @@ class SettingsScreen extends ConsumerWidget {
                     onTap: () => context.push(AppRoutes.trash),
                   ),
                   const Divider(height: 1),
-                  const ListTile(
+                  ListTile(
                     leading: Icon(Icons.file_upload_outlined),
-                    title: Text('Export data'),
-                    subtitle: Text('Coming soon'),
-                    enabled: false,
+                    title: const Text('Export JSON backup'),
+                    subtitle: const Text('Share a portable Lexis backup file.'),
+                    onTap: () async {
+                      await ref
+                          .read(settingsControllerProvider.notifier)
+                          .exportJson();
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.file_download_outlined),
+                    title: const Text('Import JSON backup'),
+                    subtitle:
+                        const Text('Merge notes, spaces, tags, and metadata.'),
+                    onTap: () async {
+                      final imported = await ref
+                          .read(settingsControllerProvider.notifier)
+                          .importJson(mode: BackupImportMode.merge);
+                      if (context.mounted && imported) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Backup imported')),
+                        );
+                      }
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.restore_page_outlined),
+                    title: const Text('Replace from JSON backup'),
+                    subtitle:
+                        const Text('Delete local data first, then import.'),
+                    onTap: () async {
+                      final confirmed = await showAppConfirmDialog(
+                        context,
+                        title: 'Replace all local data?',
+                        message:
+                            'This clears the current vault before importing the selected backup.',
+                        confirmLabel: 'Replace',
+                        destructive: true,
+                      );
+                      if (!confirmed) return;
+                      final imported = await ref
+                          .read(settingsControllerProvider.notifier)
+                          .importJson(mode: BackupImportMode.replace);
+                      if (context.mounted && imported) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Backup restored')),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const AppSectionHeader(
+              title: 'Sync',
+              subtitle: 'Prepare Lexis for future opt-in cloud sync.',
+            ),
+            const SizedBox(height: 12),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.cloud_sync_outlined),
+                    title: const Text('Cloud sync ready mode'),
+                    subtitle: const Text(
+                        'Track local changes. Provider coming soon.'),
+                    value: value.syncEnabled,
+                    onChanged: (next) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .applySettings(value.copyWith(syncEnabled: next)),
+                  ),
+                  const Divider(height: 1),
+                  const ListTile(
+                    leading: Icon(Icons.cloud_off_outlined),
+                    title: Text('Cloud provider'),
+                    subtitle: Text('Not connected'),
                   ),
                 ],
               ),

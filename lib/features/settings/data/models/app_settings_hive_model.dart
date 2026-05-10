@@ -16,6 +16,11 @@ class AppSettingsHiveModel extends HiveObject {
     required this.smartAssistAutoTitle,
     required this.smartAssistAutoSummary,
     required this.smartAssistSuggestTags,
+    required this.encryptionKeyReady,
+    required this.appLockEnabled,
+    required this.lockAfterMinutes,
+    required this.syncEnabled,
+    required this.syncLastSyncedAt,
   });
 
   factory AppSettingsHiveModel.defaults() =>
@@ -33,6 +38,11 @@ class AppSettingsHiveModel extends HiveObject {
       smartAssistAutoTitle: entity.smartAssistAutoTitle,
       smartAssistAutoSummary: entity.smartAssistAutoSummary,
       smartAssistSuggestTags: entity.smartAssistSuggestTags,
+      encryptionKeyReady: entity.encryptionKeyReady,
+      appLockEnabled: entity.appLockEnabled,
+      lockAfterMinutes: entity.lockAfterMinutes,
+      syncEnabled: entity.syncEnabled,
+      syncLastSyncedAt: entity.syncLastSyncedAt,
     );
   }
 
@@ -56,6 +66,16 @@ class AppSettingsHiveModel extends HiveObject {
   final bool smartAssistAutoSummary;
   @HiveField(9)
   final bool smartAssistSuggestTags;
+  @HiveField(10)
+  final bool encryptionKeyReady;
+  @HiveField(11)
+  final bool appLockEnabled;
+  @HiveField(12)
+  final int lockAfterMinutes;
+  @HiveField(13)
+  final bool syncEnabled;
+  @HiveField(14)
+  final DateTime? syncLastSyncedAt;
 
   AppSettingsEntity toEntity() {
     return AppSettingsEntity(
@@ -69,6 +89,11 @@ class AppSettingsHiveModel extends HiveObject {
       smartAssistAutoTitle: smartAssistAutoTitle,
       smartAssistAutoSummary: smartAssistAutoSummary,
       smartAssistSuggestTags: smartAssistSuggestTags,
+      encryptionKeyReady: encryptionKeyReady,
+      appLockEnabled: appLockEnabled,
+      lockAfterMinutes: lockAfterMinutes,
+      syncEnabled: syncEnabled,
+      syncLastSyncedAt: syncLastSyncedAt,
     );
   }
 }
@@ -95,13 +120,18 @@ class AppSettingsHiveModelAdapter extends TypeAdapter<AppSettingsHiveModel> {
       smartAssistAutoTitle: fields[7] as bool? ?? true,
       smartAssistAutoSummary: fields[8] as bool? ?? true,
       smartAssistSuggestTags: fields[9] as bool? ?? true,
+      encryptionKeyReady: fields[10] as bool? ?? false,
+      appLockEnabled: fields[11] as bool? ?? false,
+      lockAfterMinutes: fields[12] as int? ?? 5,
+      syncEnabled: fields[13] as bool? ?? false,
+      syncLastSyncedAt: fields[14] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettingsHiveModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.useMarkdownPreview)
       ..writeByte(1)
@@ -121,6 +151,16 @@ class AppSettingsHiveModelAdapter extends TypeAdapter<AppSettingsHiveModel> {
       ..writeByte(8)
       ..write(obj.smartAssistAutoSummary)
       ..writeByte(9)
-      ..write(obj.smartAssistSuggestTags);
+      ..write(obj.smartAssistSuggestTags)
+      ..writeByte(10)
+      ..write(obj.encryptionKeyReady)
+      ..writeByte(11)
+      ..write(obj.appLockEnabled)
+      ..writeByte(12)
+      ..write(obj.lockAfterMinutes)
+      ..writeByte(13)
+      ..write(obj.syncEnabled)
+      ..writeByte(14)
+      ..write(obj.syncLastSyncedAt);
   }
 }

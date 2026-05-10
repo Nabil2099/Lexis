@@ -8,4 +8,6 @@ class HiveTypeIds {
   static const searchIndex = 5;
   static const noteType = 6;
   static const noteStatus = 7;
+  static const attachment = 8;
+  static const syncRecord = 9;
 }

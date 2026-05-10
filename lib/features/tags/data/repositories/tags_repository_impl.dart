@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../notes/data/repositories/notes_repository_impl.dart';
 import '../../../notes/domain/repositories/notes_repository.dart';
+import '../../../sync/data/repositories/sync_queue_repository.dart';
 import '../../domain/entities/tag_entity.dart';
 import '../../domain/repositories/tags_repository.dart';
 import '../datasources/tags_local_datasource.dart';
@@ -10,14 +11,18 @@ import '../models/tag_hive_model.dart';
 
 final tagsRepositoryProvider = Provider<TagsRepository>((ref) {
   return TagsRepositoryImpl(
-      TagsLocalDataSource(), ref.watch(notesRepositoryProvider));
+    TagsLocalDataSource(),
+    ref.watch(notesRepositoryProvider),
+    ref.watch(syncQueueRepositoryProvider),
+  );
 });
 
 class TagsRepositoryImpl implements TagsRepository {
-  TagsRepositoryImpl(this._dataSource, this._notesRepository);
+  TagsRepositoryImpl(this._dataSource, this._notesRepository, this._syncQueue);
 
   final TagsLocalDataSource _dataSource;
   final NotesRepository _notesRepository;
+  final SyncQueueRepository _syncQueue;
 
   @override
   Future<List<TagEntity>> getAll() async {
@@ -47,6 +52,11 @@ class TagsRepositoryImpl implements TagsRepository {
       updatedAt: now,
     );
     await _dataSource.put(model);
+    await _syncQueue.record(
+      entityType: 'tag',
+      entityId: model.id,
+      action: 'create',
+    );
     return model.toEntity();
   }
 
@@ -55,6 +65,11 @@ class TagsRepositoryImpl implements TagsRepository {
     final model =
         TagHiveModel.fromEntity(tag.copyWith(updatedAt: DateTime.now()));
     await _dataSource.put(model);
+    await _syncQueue.record(
+      entityType: 'tag',
+      entityId: model.id,
+      action: 'update',
+    );
     return model.toEntity(noteCount: await getNoteCount(model.id));
   }
 
@@ -67,6 +82,7 @@ class TagsRepositoryImpl implements TagsRepository {
           .update(note.copyWith(tagIds: nextTags, updatedAt: DateTime.now()));
     }
     await _dataSource.delete(id);
+    await _syncQueue.record(entityType: 'tag', entityId: id, action: 'delete');
   }
 
   @override

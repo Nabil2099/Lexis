@@ -52,6 +52,7 @@ void main() {
       attachments: const [],
       summary: null,
       colorIndex: 1,
+      dailyDate: '2026-05-10',
     );
 
     final roundTrip = NoteHiveModel.fromEntity(entity).toEntity();
@@ -60,5 +61,6 @@ void main() {
     expect(roundTrip.type, NoteType.idea);
     expect(roundTrip.isPinned, isTrue);
     expect(roundTrip.tagIds, ['tag-1']);
+    expect(roundTrip.dailyDate, '2026-05-10');
   });
 }
