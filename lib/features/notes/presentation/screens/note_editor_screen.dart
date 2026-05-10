@@ -1,52 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
-import '../../../folders/presentation/notifiers/folders_notifier.dart';
-import '../../../tags/presentation/notifiers/tags_notifier.dart';
-import '../../data/note_model.dart';
-import '../notifiers/notes_notifier.dart';
+import '../../../../core/utils/date_utils.dart';
+import '../../../../core/utils/markdown_utils.dart';
+import '../../../../shared/widgets/app_bottom_sheet.dart';
+import '../../../../shared/widgets/app_card.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../settings/presentation/controllers/settings_controller.dart';
+import '../../../spaces/presentation/controllers/spaces_controller.dart';
+import '../../../tags/presentation/controllers/tags_controller.dart';
+import '../../domain/entities/note_entity.dart';
+import '../controllers/note_editor_controller.dart';
+import '../widgets/markdown_preview.dart';
+import '../widgets/note_type_selector.dart';
 
 class NoteEditorScreen extends ConsumerStatefulWidget {
-  const NoteEditorScreen({super.key, this.note, this.folderId});
+  const NoteEditorScreen({super.key, this.noteId});
 
-  final Note? note;
-  final int? folderId;
+  final String? noteId;
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
 }
 
 class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
-  late TextEditingController _titleController;
-  late TextEditingController _contentController;
-  bool _previewMode = false;
-  bool _isDirty = false;
-  bool _isSaved = false;
-  late Note? _note;
-  List<int> _selectedTagIds = [];
-  int? _selectedFolderId;
-
-  @override
-  void initState() {
-    super.initState();
-    _note = widget.note;
-    _selectedTagIds = widget.note?.tagIds ?? [];
-    _selectedFolderId = widget.note?.folderId ?? widget.folderId;
-    _titleController = TextEditingController(text: widget.note?.title ?? '');
-    _contentController = TextEditingController(
-      text: widget.note?.content ?? '',
-    );
-    _titleController.addListener(_markDirty);
-    _contentController.addListener(_markDirty);
-  }
-
-  void _markDirty() {
-    if (!_isDirty) {
-      setState(() => _isDirty = true);
-    }
-  }
+  final _titleController = TextEditingController();
+  final _contentController = TextEditingController();
+  bool _initialized = false;
+  bool _dirty = false;
+  bool _preview = false;
+  NoteType _type = NoteType.note;
+  String? _spaceId;
+  List<String> _tagIds = [];
 
   @override
   void dispose() {
@@ -55,533 +42,349 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     super.dispose();
   }
 
-  Future<void> _save() async {
-    if (!_isDirty) return;
+  void _hydrate(NoteEntity? note) {
+    if (_initialized) return;
+    final settings = ref.read(settingsControllerProvider).asData?.value;
+    _titleController.text = note?.title ?? '';
+    _contentController.text = note?.content ?? '';
+    _type = note?.type ?? NoteType.note;
+    _spaceId = note?.spaceId;
+    _tagIds = [...?note?.tagIds];
+    _preview = settings?.useMarkdownPreview ?? false;
+    _titleController.addListener(() => _dirty = true);
+    _contentController.addListener(() => _dirty = true);
+    _initialized = true;
+  }
+
+  Future<void> _save({bool feedback = false}) async {
+    final existing =
+        ref.read(noteEditorControllerProvider(widget.noteId)).asData?.value;
     final title = _titleController.text.trim();
     final content = _contentController.text;
-
-    if (title.isEmpty && content.isEmpty && _note == null) return;
-
-    final notifier = ref.read(notesProvider.notifier);
-    if (_note == null) {
-      final id = await notifier.createNote(
-        title: title,
-        content: content,
-        folderId: _selectedFolderId,
-      );
-      if (mounted) {
-        // Add tags to the new note
-        for (final tagId in _selectedTagIds) {
-          await notifier.addTagToNote(id, tagId);
-        }
-        
-        setState(() {
-          _note = Note(
-            id: id,
-            uuid: '',
-            title: title,
-            content: content,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-            isPinned: false,
-            isArchived: false,
-            folderId: _selectedFolderId,
-            tagIds: _selectedTagIds,
-          );
-          _isDirty = false;
-          _isSaved = true;
-        });
-        
-        // Hide the saved indicator after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            setState(() => _isSaved = false);
-          }
-        });
-      }
-    } else {
-      await notifier.updateNote(_note!.id, title: title, content: content);
-      await notifier.moveToFolder(_note!.id, _selectedFolderId);
-      
-      // Update tags - remove old tags and add new ones
-      final oldTagIds = _note!.tagIds;
-      final tagsToRemove = oldTagIds.where((id) => !_selectedTagIds.contains(id)).toList();
-      final tagsToAdd = _selectedTagIds.where((id) => !oldTagIds.contains(id)).toList();
-      
-      for (final tagId in tagsToRemove) {
-        await notifier.removeTagFromNote(_note!.id, tagId);
-      }
-      for (final tagId in tagsToAdd) {
-        await notifier.addTagToNote(_note!.id, tagId);
-      }
-      
-      if (mounted) {
-        setState(() {
-          _note = _note!.copyWith(
-            title: title,
-            content: content,
-            updatedAt: DateTime.now(),
-            folderId: _selectedFolderId,
-            tagIds: _selectedTagIds,
-          );
-          _isDirty = false;
-          _isSaved = true;
-        });
-        
-        // Hide the saved indicator after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            setState(() => _isSaved = false);
-          }
-        });
-      }
+    if (existing == null && title.isEmpty && content.trim().isEmpty) return;
+    await ref.read(noteEditorControllerProvider(widget.noteId).notifier).save(
+          title: title,
+          content: content,
+          type: _type,
+          spaceId: _spaceId,
+          tagIds: _tagIds,
+        );
+    _dirty = false;
+    if (feedback && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Saved')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final noteAsync = ref.watch(noteEditorControllerProvider(widget.noteId));
+    final spaces = ref.watch(spacesControllerProvider).asData?.value ?? [];
+    final tags = ref.watch(tagsControllerProvider).asData?.value ?? [];
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
-        if (!didPop) {
-          await _save();
-          if (context.mounted) {
-            context.pop();
-          }
-        }
+        if (didPop) return;
+        if (_dirty) await _save();
+        if (context.mounted) context.pop();
       },
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () async {
+              if (_dirty) await _save();
+              if (context.mounted) context.pop();
+            },
           ),
-          title: _isSaved
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check_circle, size: 18, color: AppColors.accent),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Saved',
-                      style: const TextStyle(
-                        color: AppColors.accent,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                )
-              : null,
           actions: [
-            if (_note != null || _selectedFolderId != null)
-              IconButton(
-                icon: Icon(Icons.folder, size: 22, color: AppColors.secondary),
-                onPressed: _showFolderPicker,
-                tooltip: 'Change Folder',
-              ),
             IconButton(
-              icon: Icon(Icons.label_outline, size: 22, color: AppColors.secondary),
-              onPressed: _showTagPicker,
-              tooltip: 'Add Tags',
-            ),
-            IconButton(
+              tooltip: _preview ? 'Edit' : 'Preview',
               icon: Icon(
-                _previewMode ? Icons.edit_outlined : Icons.visibility_outlined,
-                size: 22,
-              ),
-              tooltip: _previewMode ? 'Edit' : 'Preview',
-              onPressed: () => setState(() => _previewMode = !_previewMode),
+                  _preview ? Icons.edit_outlined : Icons.visibility_outlined),
+              onPressed: () => setState(() => _preview = !_preview),
             ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: TextField(
-                controller: _titleController,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'Title',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: AppColors.hint),
-                ),
-                textInputAction: TextInputAction.next,
-              ),
+            IconButton(
+              tooltip: 'Save',
+              icon: const Icon(Icons.check),
+              onPressed: () => _save(feedback: true),
             ),
-            Expanded(
-              child: _previewMode
-                  ? Markdown(
-                      data: _contentController.text.isEmpty 
-                          ? '_No content_' 
-                          : _contentController.text,
-                      styleSheet: MarkdownStyleSheet(
-                        p: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 16,
-                          height: 1.6,
-                        ),
-                        h1: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        h2: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        h3: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        code: const TextStyle(
-                          color: AppColors.accent,
-                          backgroundColor: AppColors.surfaceHigh,
-                          fontSize: 14,
-                          fontFamily: 'monospace',
-                        ),
-                        codeblockDecoration: BoxDecoration(
-                          color: AppColors.surfaceHigh,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        blockquote: const TextStyle(
-                          color: AppColors.secondary,
-                          fontStyle: FontStyle.italic,
-                        ),
-                        blockquoteDecoration: const BoxDecoration(
-                          border: Border(
-                            left: BorderSide(color: AppColors.border, width: 4),
-                          ),
-                        ),
-                        horizontalRuleDecoration: BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: AppColors.border, width: 1),
-                          ),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    )
-                  : TextField(
-                      controller: _contentController,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: AppColors.primary,
-                        height: 1.6,
-                      ),
-                      decoration: const InputDecoration(
-                        hintText: 'Start writing...',
-                        border: InputBorder.none,
-                        hintStyle: TextStyle(color: AppColors.hint),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      ),
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      keyboardType: TextInputType.multiline,
+            noteAsync.maybeWhen(
+              data: (note) => note == null
+                  ? const SizedBox.shrink()
+                  : PopupMenuButton<String>(
+                      onSelected: (value) async {
+                        if (value == 'pin') {
+                          await ref
+                              .read(noteEditorControllerProvider(widget.noteId)
+                                  .notifier)
+                              .togglePin();
+                        }
+                        if (value == 'archive') {
+                          await ref
+                              .read(noteEditorControllerProvider(widget.noteId)
+                                  .notifier)
+                              .archive();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Moved to archive')),
+                            );
+                          }
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                            value: 'pin',
+                            child: Text(note.isPinned ? 'Unpin' : 'Pin')),
+                        const PopupMenuItem(
+                            value: 'archive', child: Text('Archive')),
+                      ],
                     ),
+              orElse: () => const SizedBox.shrink(),
             ),
           ],
         ),
-        bottomNavigationBar: _previewMode
-            ? null
-            : _MarkdownToolbar(controller: _contentController),
+        body: noteAsync.when(
+          loading: () =>
+              const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          error: (error, _) => AppEmptyState(
+            icon: Icons.error_outline,
+            title: 'Could not open item',
+            message: '$error',
+          ),
+          data: (note) {
+            _hydrate(note);
+            return Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                    children: [
+                      TextField(
+                        controller: _titleController,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          height: 1.16,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Untitled',
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      NoteTypeSelector(
+                        selected: _type,
+                        onSelected: (type) => setState(() {
+                          _type = type;
+                          _dirty = true;
+                        }),
+                      ),
+                      const SizedBox(height: 16),
+                      _MetaSelectors(
+                        selectedSpaceId: _spaceId,
+                        spaces: spaces,
+                        selectedTagIds: _tagIds,
+                        tags: tags,
+                        onSpaceChanged: (value) => setState(() {
+                          _spaceId = value;
+                          _dirty = true;
+                        }),
+                        onTagToggled: (tagId) => setState(() {
+                          _tagIds.contains(tagId)
+                              ? _tagIds.remove(tagId)
+                              : _tagIds.add(tagId);
+                          _dirty = true;
+                        }),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.56,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: _preview
+                              ? MarkdownPreview(
+                                  markdown: _contentController.text)
+                              : TextField(
+                                  controller: _contentController,
+                                  expands: true,
+                                  minLines: null,
+                                  maxLines: null,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  keyboardType: TextInputType.multiline,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Start writing in markdown...',
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.all(18),
+                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(height: 1.65),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 12),
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(top: BorderSide(color: AppColors.border)),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${MarkdownUtils.wordCount(_contentController.text)} words',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const Spacer(),
+                        Text(
+                            note == null
+                                ? 'New item'
+                                : 'Updated ${LexisDateUtils.compact(note.updatedAt)}',
+                            style: Theme.of(context).textTheme.labelMedium),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
-  }
-
-  Future<void> _showTagPicker() async {
-    final allTags = await ref.read(tagsProvider.future);
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surfaceHigh,
-          title: const Text('Select Tags'),
-          content: StatefulBuilder(
-            builder: (context, setDialogState) {
-              return SizedBox(
-                width: double.maxFinite,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: allTags.map((tag) {
-                    final isSelected = _selectedTagIds.contains(tag.id);
-                    return FilterChip(
-                      label: Text(tag.name),
-                      selected: isSelected,
-                      selectedColor: _hexToColor(tag.colorHex).withOpacity(0.3),
-                      backgroundColor: _hexToColor(tag.colorHex).withOpacity(0.1),
-                      checkmarkColor: _hexToColor(tag.colorHex),
-                      labelStyle: TextStyle(
-                        color: isSelected ? _hexToColor(tag.colorHex) : AppColors.primary,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-                      ),
-                      onSelected: (selected) {
-                        setDialogState(() {
-                          if (selected) {
-                            _selectedTagIds.add(tag.id);
-                          } else {
-                            _selectedTagIds.remove(tag.id);
-                          }
-                        });
-                        setState(() {});
-                      },
-                    );
-                  }).toList(),
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.secondary)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _markDirty();
-              },
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showFolderPicker() async {
-    final allFolders = await ref.read(foldersProvider.future);
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surfaceHigh,
-          title: const Text('Select Folder'),
-          content: StatefulBuilder(
-            builder: (context, setDialogState) {
-              return SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RadioListTile<int?>(
-                      title: const Text('No Folder'),
-                      value: null,
-                      groupValue: _selectedFolderId,
-                      activeColor: AppColors.accent,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          _selectedFolderId = value;
-                        });
-                        setState(() {});
-                      },
-                    ),
-                    ...allFolders.map((folder) {
-                      return RadioListTile<int>(
-                        title: Text(folder.name),
-                        value: folder.id,
-                        groupValue: _selectedFolderId,
-                        activeColor: AppColors.accent,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            _selectedFolderId = value;
-                          });
-                          setState(() {});
-                        },
-                      );
-                    }).toList(),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.secondary)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _markDirty();
-              },
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Color _hexToColor(String hex) {
-    try {
-      return Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
-    } catch (_) {
-      return AppColors.accent;
-    }
   }
 }
 
-class _MarkdownToolbar extends StatelessWidget {
-  const _MarkdownToolbar({required this.controller});
-  final TextEditingController controller;
+class _MetaSelectors extends StatelessWidget {
+  const _MetaSelectors({
+    required this.selectedSpaceId,
+    required this.spaces,
+    required this.selectedTagIds,
+    required this.tags,
+    required this.onSpaceChanged,
+    required this.onTagToggled,
+  });
 
-  void _wrap(String before, String after) {
-    final sel = controller.selection;
-    if (!sel.isValid) {
-      final text = controller.text;
-      controller.value = controller.value.copyWith(
-        text: text + before + after,
-        selection: TextSelection.collapsed(offset: text.length + before.length),
-      );
-      return;
-    }
-    final text = controller.text;
-    final selected = sel.textInside(text);
-    final newText = text.replaceRange(
-      sel.start,
-      sel.end,
-      '$before$selected$after',
-    );
-    controller.value = controller.value.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: sel.start + before.length + selected.length,
-      ),
-    );
-  }
-
-  void _insertAtLineStart(String prefix) {
-    final sel = controller.selection;
-    final text = controller.text;
-    
-    int lineStart;
-    if (!sel.isValid || sel.start == 0) {
-      lineStart = 0;
-    } else {
-      lineStart = text.lastIndexOf('\n', sel.start - 1) + 1;
-    }
-
-    final newText = text.substring(0, lineStart) + prefix + text.substring(lineStart);
-    controller.value = controller.value.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: (sel.isValid ? sel.baseOffset : text.length) + prefix.length,
-      ),
-    );
-  }
+  final String? selectedSpaceId;
+  final List<dynamic> spaces;
+  final List<String> selectedTagIds;
+  final List<dynamic> tags;
+  final ValueChanged<String?> onSpaceChanged;
+  final ValueChanged<String> onTagToggled;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom > 0
-            ? 0
-            : MediaQuery.of(context).padding.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    String? selectedSpaceName;
+    for (final space in spaces) {
+      if (space.id == selectedSpaceId) {
+        selectedSpaceName = space.name as String;
+        break;
+      }
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      onTap: () => _showOrganizeSheet(context),
+      child: Row(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _ToolBtn(Icons.format_bold, () => _wrap('**', '**')),
-                _ToolBtn(Icons.format_italic, () => _wrap('_', '_')),
-                _ToolBtn(Icons.code, () => _wrap('`', '`')),
-                _ToolDivider(),
-                _ToolTextBtn('H1', () => _insertAtLineStart('# ')),
-                _ToolTextBtn('H2', () => _insertAtLineStart('## ')),
-                _ToolTextBtn('H3', () => _insertAtLineStart('### ')),
-                _ToolDivider(),
-                _ToolBtn(Icons.format_list_bulleted, () => _insertAtLineStart('- ')),
-                _ToolBtn(Icons.format_list_numbered, () => _insertAtLineStart('1. ')),
-                _ToolBtn(Icons.format_quote, () => _insertAtLineStart('> ')),
-                _ToolBtn(Icons.horizontal_rule, () {
-                  final pos = controller.selection.baseOffset;
-                  final text = controller.text;
-                  final newText = pos == -1 
-                      ? '$text\n---\n' 
-                      : '${text.substring(0, pos)}\n---\n${text.substring(pos)}';
-                  controller.value = controller.value.copyWith(
-                    text: newText,
-                    selection: TextSelection.collapsed(offset: (pos == -1 ? text.length : pos) + 5),
-                  );
-                }),
-              ],
+          const Icon(Icons.tune, size: 18, color: AppColors.cyanAccent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              [
+                selectedSpaceName ?? 'No space',
+                '${selectedTagIds.length} tag${selectedTagIds.length == 1 ? '' : 's'}',
+              ].join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
+          const Icon(Icons.keyboard_arrow_up, color: AppColors.textMuted),
         ],
       ),
     );
   }
-}
 
-class _ToolBtn extends StatelessWidget {
-  const _ToolBtn(this.icon, this.onTap);
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(icon, size: 20, color: AppColors.secondary),
-      visualDensity: VisualDensity.compact,
-    );
-  }
-}
-
-class _ToolTextBtn extends StatelessWidget {
-  const _ToolTextBtn(this.label, this.onTap);
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.secondary,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
+  void _showOrganizeSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => AppBottomSheet(
+          title: 'Organize item',
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: DropdownButtonFormField<String?>(
+                initialValue: selectedSpaceId,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.workspaces_outline),
+                  labelText: 'Move to space',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('No space'),
+                  ),
+                  ...spaces.map(
+                    (space) => DropdownMenuItem<String?>(
+                      value: space.id as String,
+                      child: Text(space.name as String),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  onSpaceChanged(value);
+                  setSheetState(() {});
+                },
+              ),
+            ),
+            if (tags.isNotEmpty) ...[
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final tag in tags)
+                        FilterChip(
+                          label: Text(tag.name),
+                          selected: selectedTagIds.contains(tag.id),
+                          onSelected: (_) {
+                            onTagToggled(tag.id as String);
+                            setSheetState(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _ToolDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 24,
-      width: 1,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: AppColors.border,
     );
   }
 }

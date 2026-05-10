@@ -1,124 +1,138 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/notes/data/note_model.dart';
-import '../../features/notes/presentation/screens/note_editor_screen.dart';
-import '../../features/notes/presentation/screens/notes_list_screen.dart';
-import '../../features/search/presentation/screens/search_screen.dart';
-import '../../features/folders/presentation/screens/folders_screen.dart';
-import '../../features/folders/presentation/screens/folder_notes_screen.dart';
+
+import '../theme/app_colors.dart';
 import '../../features/archive/presentation/screens/archive_screen.dart';
+import '../../features/notes/presentation/screens/note_editor_screen.dart';
+import '../../features/search/presentation/screens/search_screen.dart';
+import '../../features/settings/presentation/screens/settings_screen.dart';
+import '../../features/spaces/presentation/screens/space_notes_screen.dart';
+import '../../features/spaces/presentation/screens/spaces_screen.dart';
+import '../../features/tags/presentation/screens/tag_notes_screen.dart';
 import '../../features/tags/presentation/screens/tags_screen.dart';
+import '../../features/trash/presentation/screens/trash_screen.dart';
+import '../../features/vault/presentation/screens/vault_screen.dart';
 
 class AppRoutes {
-  static const home = '/';
+  const AppRoutes._();
+
+  static const vault = '/vault';
   static const search = '/search';
-  static const folders = '/folders';
-  static const folderNotes = '/folders/:id';
-  static const archive = '/archive';
+  static const spaces = '/spaces';
   static const tags = '/tags';
+  static const archive = '/archive';
+  static const trash = '/trash';
+  static const settings = '/settings';
   static const newNote = '/note/new';
-  static const editNote = '/note/:id';
 }
 
-// Shell route keys for bottom navigation
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
-final _notesNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'notes');
-final _foldersNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'folders');
-final _archiveNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'archive');
+final _vaultNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'vault');
+final _searchNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'search');
+final _spacesNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'spaces');
 final _tagsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'tags');
+final _settingsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'settings');
 
 final appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: AppRoutes.home,
+  initialLocation: AppRoutes.vault,
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
-        return ScaffoldWithNavBar(navigationShell: navigationShell);
+        return _ScaffoldWithNavBar(navigationShell: navigationShell);
       },
       branches: [
-        // Notes branch (Home)
         StatefulShellBranch(
-          navigatorKey: _notesNavigatorKey,
+          navigatorKey: _vaultNavigatorKey,
           routes: [
             GoRoute(
-              path: AppRoutes.home,
-              builder: (context, state) => const NotesListScreen(),
-              routes: [
-                GoRoute(
-                  path: 'note/new',
-                  builder: (context, state) {
-                    final folderId = state.extra as int?;
-                    return NoteEditorScreen(folderId: folderId);
-                  },
-                ),
-                GoRoute(
-                  path: 'note/:id',
-                  builder: (context, state) {
-                    final note = state.extra as Note;
-                    return NoteEditorScreen(note: note);
-                  },
-                ),
-              ],
-            ),
+                path: AppRoutes.vault, builder: (_, __) => const VaultScreen()),
           ],
         ),
-        // Folders branch
         StatefulShellBranch(
-          navigatorKey: _foldersNavigatorKey,
+          navigatorKey: _searchNavigatorKey,
           routes: [
             GoRoute(
-              path: AppRoutes.folders,
-              builder: (context, state) => const FoldersScreen(),
+                path: AppRoutes.search,
+                builder: (_, __) => const SearchScreen()),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _spacesNavigatorKey,
+          routes: [
+            GoRoute(
+              path: AppRoutes.spaces,
+              builder: (_, __) => const SpacesScreen(),
               routes: [
                 GoRoute(
                   path: ':id',
                   builder: (context, state) {
-                    final folderId = int.tryParse(state.pathParameters['id'] ?? '');
-                    final folderName = state.extra as String? ?? 'Folder';
-                    return FolderNotesScreen(folderId: folderId!, folderName: folderName);
+                    final id = state.pathParameters['id']!;
+                    return SpaceNotesScreen(
+                        spaceId: id,
+                        spaceName: state.extra as String? ?? 'Space');
                   },
                 ),
               ],
             ),
           ],
         ),
-        // Archive branch
-        StatefulShellBranch(
-          navigatorKey: _archiveNavigatorKey,
-          routes: [
-            GoRoute(
-              path: AppRoutes.archive,
-              builder: (context, state) => const ArchiveScreen(),
-            ),
-          ],
-        ),
-        // Tags branch
         StatefulShellBranch(
           navigatorKey: _tagsNavigatorKey,
           routes: [
             GoRoute(
               path: AppRoutes.tags,
-              builder: (context, state) => const TagsScreen(),
+              builder: (_, __) => const TagsScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) {
+                    final id = state.pathParameters['id']!;
+                    return TagNotesScreen(
+                        tagId: id, tagName: state.extra as String? ?? 'Tag');
+                  },
+                ),
+              ],
             ),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _settingsNavigatorKey,
+          routes: [
+            GoRoute(
+                path: AppRoutes.settings,
+                builder: (_, __) => const SettingsScreen()),
           ],
         ),
       ],
     ),
-    // Search route (outside bottom navigation)
     GoRoute(
-      path: AppRoutes.search,
+      path: AppRoutes.newNote,
       parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const SearchScreen(),
+      builder: (_, __) => const NoteEditorScreen(),
     ),
+    GoRoute(
+      path: '/note/:id',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (_, state) =>
+          NoteEditorScreen(noteId: state.pathParameters['id']),
+    ),
+    GoRoute(
+      path: AppRoutes.archive,
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (_, __) => const ArchiveScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.trash,
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (_, __) => const TrashScreen(),
+    ),
+    GoRoute(path: '/', redirect: (_, __) => AppRoutes.vault),
   ],
 );
 
-// Scaffold with bottom navigation bar
-class ScaffoldWithNavBar extends StatelessWidget {
-  const ScaffoldWithNavBar({
-    required this.navigationShell,
-    super.key,
-  });
+class _ScaffoldWithNavBar extends StatelessWidget {
+  const _ScaffoldWithNavBar({required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
@@ -126,36 +140,40 @@ class ScaffoldWithNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.note_outlined),
-            selectedIcon: Icon(Icons.note),
-            label: 'Notes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.folder_outlined),
-            selectedIcon: Icon(Icons.folder),
-            label: 'Folders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.archive_outlined),
-            selectedIcon: Icon(Icons.archive),
-            label: 'Archive',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.label_outline),
-            selectedIcon: Icon(Icons.label),
-            label: 'Tags',
-          ),
-        ],
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: NavigationBar(
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (index) {
+            navigationShell.goBranch(index,
+                initialLocation: index == navigationShell.currentIndex);
+          },
+          destinations: const [
+            NavigationDestination(
+                icon: Icon(Icons.grid_view_outlined),
+                selectedIcon: Icon(Icons.grid_view),
+                label: 'Vault'),
+            NavigationDestination(
+                icon: Icon(Icons.search),
+                selectedIcon: Icon(Icons.manage_search),
+                label: 'Search'),
+            NavigationDestination(
+                icon: Icon(Icons.workspaces_outline),
+                selectedIcon: Icon(Icons.workspaces),
+                label: 'Spaces'),
+            NavigationDestination(
+                icon: Icon(Icons.sell_outlined),
+                selectedIcon: Icon(Icons.sell),
+                label: 'Tags'),
+            NavigationDestination(
+                icon: Icon(Icons.tune),
+                selectedIcon: Icon(Icons.tune),
+                label: 'Settings'),
+          ],
+        ),
       ),
     );
   }
