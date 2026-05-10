@@ -24,6 +24,10 @@ class NoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final preview = note.summary?.trim().isNotEmpty == true
+        ? note.summary!.trim()
+        : note.plainText;
+
     return Dismissible(
       key: ValueKey('note-${note.id}'),
       direction: onPin == null && onArchive == null
@@ -76,10 +80,10 @@ class NoteCard extends StatelessWidget {
                           size: 15, color: AppColors.warning),
                   ],
                 ),
-                if (note.plainText.isNotEmpty) ...[
+                if (preview.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
-                    note.plainText,
+                    preview,
                     maxLines: compact ? 2 : 3,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(

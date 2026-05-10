@@ -8,6 +8,7 @@ import '../../../../core/utils/markdown_utils.dart';
 import '../../../../shared/widgets/app_bottom_sheet.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../ai_assist/domain/entities/note_smart_assist_result.dart';
 import '../../../settings/presentation/controllers/settings_controller.dart';
 import '../../../spaces/presentation/controllers/spaces_controller.dart';
 import '../../../tags/presentation/controllers/tags_controller.dart';
@@ -34,6 +35,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   NoteType _type = NoteType.note;
   String? _spaceId;
   List<String> _tagIds = [];
+  NoteSmartAssistResult? _assistResult;
 
   @override
   void dispose() {
@@ -62,18 +64,49 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     final title = _titleController.text.trim();
     final content = _contentController.text;
     if (existing == null && title.isEmpty && content.trim().isEmpty) return;
-    await ref.read(noteEditorControllerProvider(widget.noteId).notifier).save(
+    final result = await ref
+        .read(noteEditorControllerProvider(widget.noteId).notifier)
+        .save(
           title: title,
           content: content,
           type: _type,
           spaceId: _spaceId,
           tagIds: _tagIds,
         );
+    if (!mounted) return;
+    if (result.generatedTitle != null && _titleController.text.trim().isEmpty) {
+      _titleController.text = result.note.title;
+    }
+    setState(() {
+      _assistResult = result.generatedAnything ? result : null;
+    });
     _dirty = false;
     if (feedback && mounted) {
+      final message = result.generatedAnything
+          ? 'Saved with Smart Assist suggestions'
+          : 'Saved';
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Saved')));
+          .showSnackBar(SnackBar(content: Text(message)));
     }
+  }
+
+  Future<void> _applySuggestedTags(List<String> tagIds) async {
+    final updated = await ref
+        .read(noteEditorControllerProvider(widget.noteId).notifier)
+        .applySuggestedTags(tagIds);
+    if (!mounted || updated == null) return;
+    setState(() {
+      _tagIds = [...updated.tagIds];
+      _assistResult = null;
+      _dirty = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Applied ${tagIds.length} suggested tag${tagIds.length == 1 ? '' : 's'}',
+        ),
+      ),
+    );
   }
 
   @override
@@ -202,6 +235,15 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                           _dirty = true;
                         }),
                       ),
+                      if (_assistResult != null) ...[
+                        const SizedBox(height: 14),
+                        _SmartAssistCard(
+                          result: _assistResult!,
+                          tags: tags,
+                          onApplyTags: _applySuggestedTags,
+                          onDismiss: () => setState(() => _assistResult = null),
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       SizedBox(
                         height: MediaQuery.of(context).size.height * 0.56,
@@ -269,6 +311,150 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _SmartAssistCard extends StatelessWidget {
+  const _SmartAssistCard({
+    required this.result,
+    required this.tags,
+    required this.onApplyTags,
+    required this.onDismiss,
+  });
+
+  final NoteSmartAssistResult result;
+  final List<dynamic> tags;
+  final ValueChanged<List<String>> onApplyTags;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestedTags = tags
+        .where((tag) => result.suggestedTagIds.contains(tag.id as String))
+        .toList();
+    final summary = result.generatedSummary?.trim();
+
+    return AppCard(
+      highlighted: true,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome,
+                  size: 18, color: AppColors.cyanAccent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Smart Assist',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Dismiss',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: onDismiss,
+              ),
+            ],
+          ),
+          if (result.generatedTitle != null) ...[
+            const SizedBox(height: 8),
+            _AssistLine(
+              icon: Icons.title,
+              label: 'Title generated',
+              value: result.generatedTitle!,
+            ),
+          ],
+          if (summary != null && summary.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              summary,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
+            ),
+          ],
+          if (suggestedTags.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Suggested tags',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final tag in suggestedTags)
+                  Chip(
+                    label: Text(tag.name as String),
+                    avatar: const Icon(Icons.sell_outlined, size: 15),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: () => onApplyTags(result.suggestedTagIds),
+                icon: const Icon(Icons.add),
+                label: const Text('Apply tags'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistLine extends StatelessWidget {
+  const _AssistLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AppColors.textMuted),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+              children: [
+                TextSpan(
+                  text: '$label: ',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                TextSpan(text: value),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

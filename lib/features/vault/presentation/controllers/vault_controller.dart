@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/sync/app_sync.dart';
 import '../../../notes/data/repositories/notes_repository_impl.dart';
 import '../../../notes/domain/entities/note_entity.dart';
 
@@ -21,6 +22,7 @@ class VaultState {
 class VaultController extends AsyncNotifier<VaultState> {
   @override
   Future<VaultState> build() async {
+    ref.watch(appSyncSignalProvider);
     final repo = ref.watch(notesRepositoryProvider);
     final active = await repo.getActive();
     return VaultState(

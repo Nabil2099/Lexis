@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/sync/app_sync.dart';
 import '../../../notes/domain/entities/note_entity.dart';
 import '../../data/repositories/search_repository_impl.dart';
 import '../../domain/entities/search_filter_entity.dart';
@@ -30,7 +31,8 @@ class SearchState {
 class SearchController extends AsyncNotifier<SearchState> {
   @override
   Future<SearchState> build() async {
-    const filter = SearchFilterEntity();
+    ref.watch(appSyncSignalProvider);
+    final filter = state.asData?.value.filter ?? const SearchFilterEntity();
     return SearchState(
         filter: filter,
         results: await ref.watch(searchRepositoryProvider).search(filter));

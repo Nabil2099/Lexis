@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/sync/app_sync.dart';
 import '../../../archive/presentation/controllers/archive_controller.dart';
 import '../../../notes/presentation/controllers/notes_controller.dart';
 import '../../../search/presentation/controllers/search_controller.dart';
@@ -26,6 +27,7 @@ class SettingsController extends AsyncNotifier<AppSettingsEntity> {
 
   Future<void> clearAllData() async {
     await ref.read(settingsRepositoryProvider).clearAllData();
+    notifyAppDataChanged(ref);
     ref.invalidate(vaultControllerProvider);
     ref.invalidate(notesControllerProvider);
     ref.invalidate(searchControllerProvider);

@@ -1,9 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/sync/app_sync.dart';
+import '../../../ai_assist/application/note_smart_assist_service.dart';
+import '../../../ai_assist/domain/entities/note_smart_assist_result.dart';
 import '../../../archive/presentation/controllers/archive_controller.dart';
 import '../../../search/presentation/controllers/search_controller.dart';
+import '../../../settings/domain/entities/app_settings_entity.dart';
+import '../../../settings/presentation/controllers/settings_controller.dart';
 import '../../../spaces/presentation/controllers/spaces_controller.dart';
 import '../../../tags/presentation/controllers/tags_controller.dart';
+import '../../../tags/data/repositories/tags_repository_impl.dart';
 import '../../../trash/presentation/controllers/trash_controller.dart';
 import '../../../vault/presentation/controllers/vault_controller.dart';
 import '../../data/repositories/notes_repository_impl.dart';
@@ -28,7 +34,7 @@ class NoteEditorController extends AsyncNotifier<NoteEntity?> {
     return ref.watch(notesRepositoryProvider).getById(noteId!);
   }
 
-  Future<NoteEntity> save({
+  Future<NoteSmartAssistResult> save({
     required String title,
     required String content,
     required NoteType type,
@@ -57,9 +63,70 @@ class NoteEditorController extends AsyncNotifier<NoteEntity?> {
               tagIds: tagIds,
             ),
           );
-    state = AsyncData(saved);
+    final assistResult = await _applySmartAssist(saved);
+    state = AsyncData(assistResult.note);
     _refreshDependents();
-    return saved;
+    return assistResult;
+  }
+
+  Future<NoteSmartAssistResult> _applySmartAssist(NoteEntity saved) async {
+    final settings = ref.read(settingsControllerProvider).asData?.value ??
+        AppSettingsEntity.defaults();
+    if (!settings.smartAssistEnabled) {
+      return NoteSmartAssistResult(note: saved);
+    }
+
+    final tags = await ref.read(tagsRepositoryProvider).getAll();
+    final suggestion = ref.read(noteSmartAssistServiceProvider).suggest(
+          note: saved,
+          availableTags: tags,
+          settings: settings,
+        );
+
+    final nextTitle = suggestion.generatedTitle ?? saved.title;
+    final nextSummary = suggestion.generatedSummary ?? saved.summary;
+    final shouldUpdateNote =
+        nextTitle != saved.title || nextSummary != saved.summary;
+    final visibleGeneratedTitle =
+        nextTitle != saved.title ? suggestion.generatedTitle : null;
+    final visibleGeneratedSummary =
+        nextSummary != saved.summary ? suggestion.generatedSummary : null;
+
+    if (!shouldUpdateNote) {
+      return NoteSmartAssistResult(
+        note: saved,
+        generatedTitle: visibleGeneratedTitle,
+        generatedSummary: visibleGeneratedSummary,
+        suggestedTagIds: suggestion.suggestedTagIds,
+      );
+    }
+
+    final updated = await ref.read(notesRepositoryProvider).update(
+          saved.copyWith(
+            title: nextTitle,
+            summary: nextSummary,
+            updatedAt: DateTime.now(),
+          ),
+        );
+
+    return NoteSmartAssistResult(
+      note: updated,
+      generatedTitle: visibleGeneratedTitle,
+      generatedSummary: visibleGeneratedSummary,
+      suggestedTagIds: suggestion.suggestedTagIds,
+    );
+  }
+
+  Future<NoteEntity?> applySuggestedTags(List<String> tagIds) async {
+    final note = state.asData?.value;
+    if (note == null || tagIds.isEmpty) return note;
+    final merged = {...note.tagIds, ...tagIds}.toList();
+    final updated = await ref.read(notesRepositoryProvider).update(
+          note.copyWith(tagIds: merged, updatedAt: DateTime.now()),
+        );
+    state = AsyncData(updated);
+    _refreshDependents();
+    return updated;
   }
 
   Future<void> togglePin() async {
@@ -79,6 +146,7 @@ class NoteEditorController extends AsyncNotifier<NoteEntity?> {
   }
 
   void _refreshDependents() {
+    notifyAppDataChanged(ref);
     ref.invalidate(vaultControllerProvider);
     ref.invalidate(notesControllerProvider);
     ref.invalidate(archiveControllerProvider);

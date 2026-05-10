@@ -73,6 +73,64 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
+            const AppSectionHeader(
+              title: 'Smart Assist',
+              subtitle:
+                  'Private, offline suggestions for titles, summaries, and tags.',
+            ),
+            const SizedBox(height: 12),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.auto_awesome_outlined),
+                    title: const Text('Enable Smart Assist'),
+                    subtitle: const Text(
+                        'Run local suggestions after saving a note.'),
+                    value: value.smartAssistEnabled,
+                    onChanged: (next) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .applySettings(
+                            value.copyWith(smartAssistEnabled: next)),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('Auto-title empty notes'),
+                    value: value.smartAssistAutoTitle,
+                    onChanged: value.smartAssistEnabled
+                        ? (next) => ref
+                            .read(settingsControllerProvider.notifier)
+                            .applySettings(
+                                value.copyWith(smartAssistAutoTitle: next))
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('Generate summaries'),
+                    value: value.smartAssistAutoSummary,
+                    onChanged: value.smartAssistEnabled
+                        ? (next) => ref
+                            .read(settingsControllerProvider.notifier)
+                            .applySettings(
+                                value.copyWith(smartAssistAutoSummary: next))
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('Suggest matching tags'),
+                    value: value.smartAssistSuggestTags,
+                    onChanged: value.smartAssistEnabled
+                        ? (next) => ref
+                            .read(settingsControllerProvider.notifier)
+                            .applySettings(
+                                value.copyWith(smartAssistSuggestTags: next))
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
             const AppSectionHeader(title: 'Vault'),
             const SizedBox(height: 12),
             AppCard(

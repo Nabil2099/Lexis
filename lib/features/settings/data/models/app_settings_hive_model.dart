@@ -12,6 +12,10 @@ class AppSettingsHiveModel extends HiveObject {
     required this.useTrueBlack,
     required this.defaultSpaceId,
     required this.lastOpenedAt,
+    required this.smartAssistEnabled,
+    required this.smartAssistAutoTitle,
+    required this.smartAssistAutoSummary,
+    required this.smartAssistSuggestTags,
   });
 
   factory AppSettingsHiveModel.defaults() =>
@@ -25,6 +29,10 @@ class AppSettingsHiveModel extends HiveObject {
       useTrueBlack: entity.useTrueBlack,
       defaultSpaceId: entity.defaultSpaceId,
       lastOpenedAt: entity.lastOpenedAt,
+      smartAssistEnabled: entity.smartAssistEnabled,
+      smartAssistAutoTitle: entity.smartAssistAutoTitle,
+      smartAssistAutoSummary: entity.smartAssistAutoSummary,
+      smartAssistSuggestTags: entity.smartAssistSuggestTags,
     );
   }
 
@@ -40,6 +48,14 @@ class AppSettingsHiveModel extends HiveObject {
   final String defaultSpaceId;
   @HiveField(5)
   final DateTime lastOpenedAt;
+  @HiveField(6)
+  final bool smartAssistEnabled;
+  @HiveField(7)
+  final bool smartAssistAutoTitle;
+  @HiveField(8)
+  final bool smartAssistAutoSummary;
+  @HiveField(9)
+  final bool smartAssistSuggestTags;
 
   AppSettingsEntity toEntity() {
     return AppSettingsEntity(
@@ -49,6 +65,10 @@ class AppSettingsHiveModel extends HiveObject {
       useTrueBlack: useTrueBlack,
       defaultSpaceId: defaultSpaceId,
       lastOpenedAt: lastOpenedAt,
+      smartAssistEnabled: smartAssistEnabled,
+      smartAssistAutoTitle: smartAssistAutoTitle,
+      smartAssistAutoSummary: smartAssistAutoSummary,
+      smartAssistSuggestTags: smartAssistSuggestTags,
     );
   }
 }
@@ -71,13 +91,17 @@ class AppSettingsHiveModelAdapter extends TypeAdapter<AppSettingsHiveModel> {
       useTrueBlack: fields[3] as bool? ?? true,
       defaultSpaceId: fields[4] as String? ?? '',
       lastOpenedAt: fields[5] as DateTime? ?? DateTime.now(),
+      smartAssistEnabled: fields[6] as bool? ?? true,
+      smartAssistAutoTitle: fields[7] as bool? ?? true,
+      smartAssistAutoSummary: fields[8] as bool? ?? true,
+      smartAssistSuggestTags: fields[9] as bool? ?? true,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettingsHiveModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.useMarkdownPreview)
       ..writeByte(1)
@@ -89,6 +113,14 @@ class AppSettingsHiveModelAdapter extends TypeAdapter<AppSettingsHiveModel> {
       ..writeByte(4)
       ..write(obj.defaultSpaceId)
       ..writeByte(5)
-      ..write(obj.lastOpenedAt);
+      ..write(obj.lastOpenedAt)
+      ..writeByte(6)
+      ..write(obj.smartAssistEnabled)
+      ..writeByte(7)
+      ..write(obj.smartAssistAutoTitle)
+      ..writeByte(8)
+      ..write(obj.smartAssistAutoSummary)
+      ..writeByte(9)
+      ..write(obj.smartAssistSuggestTags);
   }
 }

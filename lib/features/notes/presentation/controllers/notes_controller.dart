@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/sync/app_sync.dart';
 import '../../../archive/presentation/controllers/archive_controller.dart';
 import '../../../search/presentation/controllers/search_controller.dart';
 import '../../../spaces/presentation/controllers/spaces_controller.dart';
@@ -16,8 +17,10 @@ final notesControllerProvider =
 
 class NotesController extends AsyncNotifier<List<NoteEntity>> {
   @override
-  Future<List<NoteEntity>> build() async =>
-      ref.watch(notesRepositoryProvider).getActive();
+  Future<List<NoteEntity>> build() async {
+    ref.watch(appSyncSignalProvider);
+    return ref.watch(notesRepositoryProvider).getActive();
+  }
 
   Future<NoteEntity> create({
     String title = '',
@@ -64,6 +67,7 @@ class NotesController extends AsyncNotifier<List<NoteEntity>> {
   }
 
   void _refreshDependents() {
+    notifyAppDataChanged(ref);
     ref.invalidateSelf();
     ref.invalidate(vaultControllerProvider);
     ref.invalidate(archiveControllerProvider);
